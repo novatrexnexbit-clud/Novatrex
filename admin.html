@@ -1,0 +1,324 @@
+<!-- ===================================================== -->
+<!-- ============= ADMIN EXCHANGE CORE BLOCK ============ -->
+<!-- ===================================================== -->
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Exchange Admin Control</title>
+
+<style>
+body{
+  margin:0;
+  background:#0b0e11;
+  color:#fff;
+  font-family:Arial;
+}
+.adminContainer{
+  display:flex;
+  height:100vh;
+}
+.sidebar{
+  width:240px;
+  background:#11161c;
+  padding:20px;
+}
+.sidebar h2{
+  color:#f0b90b;
+}
+.sidebar button{
+  display:block;
+  width:100%;
+  margin:10px 0;
+  padding:10px;
+  background:#1e2329;
+  border:none;
+  color:#fff;
+  cursor:pointer;
+  text-align:left;
+}
+.main{
+  flex:1;
+  padding:20px;
+  overflow:auto;
+}
+.cardGrid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:15px;
+}
+.card{
+  background:#161a1e;
+  padding:20px;
+  border-radius:8px;
+  cursor:pointer;
+}
+.userCard{
+  background:#1e2329;
+  padding:15px;
+  margin:10px 0;
+  border-radius:6px;
+}
+button.action{
+  margin:5px;
+  padding:6px 10px;
+  border:none;
+  background:#f0b90b;
+  cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<div class="adminContainer">
+
+<!-- ================= SIDEBAR ================= -->
+
+<div class="sidebar">
+<h2>ADMIN</h2>
+<button onclick="showSection('overview')">Overview</button>
+<button onclick="showSection('users')">Users</button>
+<button onclick="showSection('kyc')">KYC Control</button>
+<button onclick="showSection('risk')">Risk Engine</button>
+<button onclick="showSection('wallet')">Wallet Monitoring</button>
+<button onclick="showSection('blacklist')">Blacklist</button>
+<button onclick="showSection('logs')">Security Logs</button>
+<button onclick="showSection('adminLogs')">Admin Activity</button>
+</div>
+
+<!-- ================= MAIN ================= -->
+
+<div class="main">
+
+<div id="overviewSection">
+<h2>Control Center</h2>
+<div class="cardGrid">
+<div class="card" onclick="filterAllUsers()" >
+Total Users
+<h3 id="totalUsers">0</h3>
+</div>
+
+<div class="card" onclick="filterKYC('pending')" >
+KYC Pending
+<h3 id="kycPending">0</h3>
+</div>
+
+<div class="card" onclick="filterHighRisk()">
+High Risk
+<h3 id="highRisk">0</h3>
+</div>
+
+<div class="card" onclick="showSection('blacklist')">
+Blacklisted
+<h3 id="blackCount">0</h3>
+</div>
+
+<div class="card" onclick="filterWithdrawPending()">
+Withdraw Pending
+<h3 id="withdrawPending">0</h3>
+</div>
+</div>
+</div>
+
+<div id="contentArea"></div>
+
+</div>
+</div>
+
+<!-- ================= FIREBASE ================= -->
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, addDoc, query, where } 
+from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "YOUR_KEY",
+  authDomain: "YOUR_DOMAIN",
+  projectId: "YOUR_PROJECT"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth();
+
+let ADMIN_ID = null;
+
+auth.onAuthStateChanged(user=>{
+  if(user){
+    ADMIN_ID = user.uid;
+    loadOverview();
+  }
+});
+
+/* ================= ANALYTICS ================= */
+
+async function loadOverview(){
+
+  const snap = await getDocs(collection(db,"users"));
+
+  let total=0, kyc=0, risk=0, black=0, withdraw=0;
+
+  snap.forEach(d=>{
+    const u=d.data();
+    total++;
+    if(u.kyc?.status==="pending") kyc++;
+    if((u.riskScore||0)>=70) risk++;
+    if(u.blacklisted) black++;
+    if(u.withdrawRequest) withdraw++;
+  });
+
+  totalUsers.innerText=total;
+  kycPending.innerText=kyc;
+  highRisk.innerText=risk;
+  blackCount.innerText=black;
+  withdrawPending.innerText=withdraw;
+}
+
+/* ================= RISK ENGINE ================= */
+
+async function updateRisk(userId,delta){
+
+  const ref=doc(db,"users",userId);
+  const snap=await getDoc(ref);
+  let u=snap.data();
+
+  let newScore=(u.riskScore||0)+delta;
+  if(newScore<0) newScore=0;
+
+  await updateDoc(ref,{
+    riskScore:newScore,
+    walletFrozen:newScore>=80,
+    withdrawDisabled:newScore>=80
+  });
+}
+
+/* ================= ACTION LOGGER ================= */
+
+async function logAdmin(action,target){
+  await addDoc(collection(db,"adminLogs"),{
+    adminId:ADMIN_ID,
+    action,
+    targetUser:target,
+    timestamp:Date.now()
+  });
+}
+
+async function logSecurity(userId,action){
+  await addDoc(collection(db,"securityLogs"),{
+    userId,
+    action,
+    timestamp:Date.now()
+  });
+}
+
+/* ================= USER ACTIONS ================= */
+
+async function approveKYC(id){
+  await updateDoc(doc(db,"users",id),{"kyc.status":"approved"});
+  await logAdmin("Approve KYC",id);
+  await logSecurity(id,"KYC Approved");
+  loadOverview();
+}
+
+async function rejectKYC(id){
+  await updateDoc(doc(db,"users",id),{"kyc.status":"rejected"});
+  await updateRisk(id,20);
+  await logAdmin("Reject KYC",id);
+  await logSecurity(id,"KYC Rejected");
+  loadOverview();
+}
+
+async function blacklistUser(id){
+  await updateDoc(doc(db,"users",id),{blacklisted:true,walletFrozen:true});
+  await updateRisk(id,40);
+  await logAdmin("Blacklist",id);
+  await logSecurity(id,"Blacklisted");
+  loadOverview();
+}
+
+async function cancelWithdraw(id,amount){
+  const ref=doc(db,"users",id);
+  const snap=await getDoc(ref);
+  const u=snap.data();
+
+  await updateDoc(ref,{
+    withdrawRequest:false,
+    balance:(u.balance||0)+amount
+  });
+
+  await updateRisk(id,15);
+  await logAdmin("Cancel Withdraw",id);
+  await logSecurity(id,"Withdraw Cancelled");
+  loadOverview();
+}
+
+/* ================= FILTERS ================= */
+
+async function filterAllUsers(){
+  const snap=await getDocs(collection(db,"users"));
+  renderUsers(snap);
+}
+
+async function filterKYC(status){
+  const q=query(collection(db,"users"),where("kyc.status","==",status));
+  const snap=await getDocs(q);
+  renderUsers(snap);
+}
+
+async function filterHighRisk(){
+  const snap=await getDocs(collection(db,"users"));
+  const arr=[];
+  snap.forEach(d=>{
+    if((d.data().riskScore||0)>=70) arr.push(d);
+  });
+  renderUsers({docs:arr});
+}
+
+async function filterWithdrawPending(){
+  const q=query(collection(db,"users"),where("withdrawRequest","==",true));
+  const snap=await getDocs(q);
+  renderUsers(snap);
+}
+
+/* ================= RENDER ================= */
+
+function renderUsers(snapshot){
+
+  contentArea.innerHTML="";
+
+  snapshot.docs.forEach(d=>{
+    const u=d.data();
+    contentArea.innerHTML+=`
+    <div class="userCard">
+      <div>Email: ${u.email}</div>
+      <div>Balance: ${u.balance||0}</div>
+      <div>Risk: ${u.riskScore||0}</div>
+      <div>KYC: ${u.kyc?.status||"none"}</div>
+
+      <button class="action" onclick="approveKYC('${d.id}')">Approve KYC</button>
+      <button class="action" onclick="rejectKYC('${d.id}')">Reject KYC</button>
+      <button class="action" onclick="blacklistUser('${d.id}')">Blacklist</button>
+    </div>
+    `;
+  });
+}
+
+window.showSection=function(){};
+window.filterAllUsers=filterAllUsers;
+window.filterKYC=filterKYC;
+window.filterHighRisk=filterHighRisk;
+window.filterWithdrawPending=filterWithdrawPending;
+window.approveKYC=approveKYC;
+window.rejectKYC=rejectKYC;
+window.blacklistUser=blacklistUser;
+window.cancelWithdraw=cancelWithdraw;
+
+</script>
+
+</body>
+</html>
