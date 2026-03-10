@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paramètres - NOVATREX</title>
+
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+<style>
+body{
+margin:0;
+font-family:Arial, sans-serif;
+background:#0b0f19;
+color:#fff;
+}
+
+.container{
+max-width:1100px;
+margin:auto;
+padding:30px 20px;
+}
+
+.card{
+background:#131a2a;
+border-radius:15px;
+padding:25px;
+margin-bottom:25px;
+box-shadow:0 10px 30px rgba(0,0,0,0.4);
+}
+
+.card h2{
+margin-bottom:20px;
+font-size:20px;
+}
+
+input, select{
+width:100%;
+padding:12px;
+margin-bottom:15px;
+background:#1f2a44;
+border:none;
+border-radius:8px;
+color:#fff;
+}
+
+button{
+padding:12px 20px;
+border:none;
+border-radius:8px;
+background:linear-gradient(90deg,#7c3aed,#00e5ff);
+color:#fff;
+cursor:pointer;
+font-weight:bold;
+transition:0.3s;
+}
+
+button:hover{opacity:0.9;}
+
+.toggle{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-bottom:15px;
+}
+
+.switch{
+position:relative;
+width:50px;
+height:24px;
+}
+
+.switch input{display:none;}
+
+.slider{
+position:absolute;
+cursor:pointer;
+top:0;left:0;right:0;bottom:0;
+background:#555;
+border-radius:24px;
+transition:0.3s;
+}
+
+.slider:before{
+position:absolute;
+content:"";
+height:18px;
+width:18px;
+left:3px;
+bottom:3px;
+background:white;
+border-radius:50%;
+transition:0.3s;
+}
+
+input:checked + .slider{
+background:#00e5ff;
+}
+
+input:checked + .slider:before{
+transform:translateX(26px);
+}
+
+.locked{
+text-align:center;
+padding:100px 20px;
+}
+
+.popup{
+position:fixed;
+inset:0;
+background:rgba(0,0,0,0.6);
+display:none;
+align-items:center;
+justify-content:center;
+}
+
+.popup-content{
+background:#131a2a;
+padding:25px;
+border-radius:12px;
+width:320px;
+}
+
+.popup.show{display:flex;}
+
+.success{color:#00ff88;}
+.error{color:#ff4d4d;}
+</style>
+</head>
+
+<body>
+
+<div id="lockedView" class="locked" style="display:none;">
+<h2>⚠️ Veuillez vous connecter pour accéder à cette fonctionnalité.</h2>
+<br>
+<a href="login.html"><button>Se connecter</button></a>
+</div>
+
+<div id="settingsContent" style="display:none;">
+<div class="container">
+
+<!-- SECTION 1 -->
+<div class="card">
+<h2>Informations personnelles</h2>
+<input id="fullName" placeholder="Nom complet">
+<input id="email" placeholder="Email">
+<input id="phone" placeholder="Téléphone">
+<input id="country" placeholder="Pays">
+<button onclick="saveProfile()">Mettre à jour</button>
+<div id="profileMsg"></div>
+</div>
+
+<!-- SECTION 2 -->
+<div class="card">
+<h2>Sécurité du compte</h2>
+<p>Email vérifié : <span id="emailVerified">Oui</span></p>
+<p>KYC : <span id="kycStatus">Non vérifié</span></p>
+<button onclick="openPasswordPopup()">Changer mot de passe</button>
+</div>
+
+<!-- SECTION 3 -->
+<div class="card">
+<h2>Paramètres de trading</h2>
+
+<div class="toggle">
+<span>Notifications Trading</span>
+<label class="switch">
+<input type="checkbox" id="notifToggle">
+<span class="slider"></span>
+</label>
+</div>
+<div class="risk-box">
+  <h3>Risk & Security</h3>
+  <p>Risk Score: <span id="riskScore"></span></p>
+  <p>Risk Level: <span id="riskLevel"></span></p>
+  <p>Status: <span id="blacklistStatus"></span></p>
+</div>
+
+<div class="toggle">
+<span>Signaux automatiques</span>
+<label class="switch">
+<input type="checkbox" id="signalToggle">
+<span class="slider"></span>
+</label>
+</div>
+
+<select id="leverage">
+<option value="1x">1x</option>
+<option value="5x">5x</option>
+<option value="10x">10x</option>
+</select>
+
+<button onclick="savePreferences()">Sauvegarder préférences</button>
+</div>
+
+<!-- SECTION 4 -->
+<div class="card">
+<h2>Sécurité avancée</h2>
+
+<div class="toggle">
+<span>Activer 2FA</span>
+<label class="switch">
+<input type="checkbox" id="twofaToggle">
+<span class="slider"></span>
+</label>
+</div>
+
+<input id="pinCode" placeholder="Code PIN 4 chiffres">
+<button onclick="saveSecurity()">Enregistrer sécurité</button>
+</div>
+
+<!-- SECTION 5 -->
+<div class="card">
+<h2 style="color:#ff4d4d;">Suppression compte</h2>
+<button style="background:#ff4d4d;" onclick="confirmDelete()">Supprimer mon compte</button>
+</div>
+
+</div>
+</div>
+
+<!-- PASSWORD POPUP -->
+<div class="popup" id="passwordPopup">
+<div class="popup-content">
+<h3>Changer mot de passe</h3>
+<input id="oldPass" placeholder="Ancien mot de passe">
+<input id="newPass" placeholder="Nouveau mot de passe">
+<input id="confirmPass" placeholder="Confirmation">
+<button onclick="changePassword()">Valider</button>
+</div>
+</div>
+
+<script>
+
+/* SECURITY ACCESS */
+const user = localStorage.getItem("loggedInUser");
+
+if(!user){
+document.getElementById("lockedView").style.display="block";
+}else{
+document.getElementById("settingsContent").style.display="block";
+}
+
+const profileKey="user_"+user+"_profile";
+const securityKey="user_"+user+"_security";
+const prefKey="user_"+user+"_preferences";
+
+let profile=JSON.parse(localStorage.getItem(profileKey))||{};
+let security=JSON.parse(localStorage.getItem(securityKey))||{};
+let prefs=JSON.parse(localStorage.getItem(prefKey))||{};
+
+function loadData(){
+if(!user) return;
+
+document.getElementById("fullName").value=profile.fullName||"";
+document.getElementById("email").value=profile.email||user;
+document.getElementById("phone").value=profile.phone||"";
+document.getElementById("country").value=profile.country||"";
+
+document.getElementById("notifToggle").checked=prefs.notifications||false;
+document.getElementById("signalToggle").checked=prefs.signals||false;
+document.getElementById("leverage").value=prefs.leverage||"1x";
+
+document.getElementById("twofaToggle").checked=security.twofa||false;
+document.getElementById("pinCode").value=security.pin||"";
+}
+
+function saveProfile(){
+profile={
+fullName:fullName.value,
+email:email.value,
+phone:phone.value,
+country:country.value
+};
+localStorage.setItem(profileKey,JSON.stringify(profile));
+profileMsg.innerHTML="<p class='success'>Profil mis à jour</p>";
+}
+
+function openPasswordPopup(){
+document.getElementById("passwordPopup").classList.add("show");
+}
+
+function changePassword(){
+if(newPass.value!==confirmPass.value || newPass.value.length<6){
+alert("Mot de passe invalide");
+return;
+}
+alert("Mot de passe modifié (simulation)");
+document.getElementById("passwordPopup").classList.remove("show");
+}
+
+function savePreferences(){
+prefs={
+notifications:notifToggle.checked,
+signals:signalToggle.checked,
+leverage:leverage.value
+};
+localStorage.setItem(prefKey,JSON.stringify(prefs));
+alert("Préférences sauvegardées");
+}
+
+function saveSecurity(){
+if(pinCode.value.length!==4){
+alert("PIN invalide");
+return;
+}
+security={
+twofa:twofaToggle.checked,
+pin:pinCode.value
+};
+localStorage.setItem(securityKey,JSON.stringify(security));
+alert("Sécurité enregistrée");
+}
+
+function confirmDelete(){
+if(confirm("Confirmer suppression ?")){
+localStorage.removeItem("user_"+user+"_wallet");
+localStorage.removeItem("user_"+user+"_history");
+localStorage.removeItem("user_"+user+"_profile");
+localStorage.removeItem("user_"+user+"_security");
+localStorage.removeItem("user_"+user+"_preferences");
+localStorage.removeItem("loggedInUser");
+window.location.href="index.html";
+}
+}
+
+loadData();
+
+</script>
+
+</body>
+</html>
