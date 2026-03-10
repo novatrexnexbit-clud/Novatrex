@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>NOVATREX Trade</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="style.css">
+
+<style>
+
+.trade-container{
+padding:70px 10px 100px;
+display:grid;
+grid-template-columns: 1fr 2fr 1fr;
+gap:10px;
+}
+
+@media(max-width:900px){
+.trade-container{
+grid-template-columns:1fr;
+}
+}
+
+.panel{
+background:rgba(20,22,40,0.9);
+border:1px solid rgba(255,255,255,0.05);
+border-radius:8px;
+padding:10px;
+}
+
+#tvchart{
+width:100%;
+height:500px;
+border-radius:6px;
+}
+
+.price-live{
+font-size:18px;
+font-weight:bold;
+margin-bottom:5px;
+color:#00ffae;
+}
+
+.order-row{
+display:flex;
+justify-content:space-between;
+font-size:12px;
+padding:3px 0;
+position:relative;
+}
+
+.depth{
+position:absolute;
+height:100%;
+left:0;
+top:0;
+opacity:0.12;
+}
+
+.sell .depth{ background:red; }
+.buy .depth{ background:#00ffae; }
+
+.sell{ color:#ff4d4d; }
+.buy{ color:#00ffae; }
+
+.trade-history{
+height:160px;
+overflow-y:auto;
+font-size:12px;
+}
+
+input{
+width:100%;
+padding:6px;
+margin:5px 0;
+background:#14162a;
+border:1px solid rgba(255,255,255,0.1);
+color:white;
+border-radius:4px;
+}
+
+button{
+cursor:pointer;
+border:none;
+border-radius:6px;
+padding:8px;
+font-weight:bold;
+}
+
+.buy-btn{background:#00ffae;color:black;width:100%;margin-top:5px;}
+.sell-btn{background:#ff4d4d;color:white;width:100%;margin-top:5px;}
+
+</style>
+</head>
+
+<body>
+
+<header>
+<div class="logo">NOVATREX</div>
+<div class="search">Trade Terminal</div>
+</header>
+
+<div class="trade-container">
+
+<!-- ORDER PANEL -->
+<div class="panel">
+<h3>Order Panel</h3>
+
+<input type="number" id="priceInput" placeholder="Price">
+<input type="number" id="qtyInput" placeholder="Quantity">
+<input type="number" id="stopLossInput" placeholder="Stop Loss (optional)">
+
+<button class="buy-btn" onclick="submitOrder('buy')">BUY</button>
+<button class="sell-btn" onclick="submitOrder('sell')">SELL</button>
+
+</div>
+
+<!-- CHART -->
+<div class="panel">
+<div class="price-live" id="livePrice">Loading...</div>
+<div id="tvchart"></div>
+</div>
+
+<!-- ORDERBOOK + TRADES -->
+<div class="panel">
+
+<h4>Order Book (Live Binance)</h4>
+<div id="orderbook"></div>
+
+<hr style="border:1px solid rgba(255,255,255,0.05);margin:10px 0;">
+
+<h4>Recent Trades (Live)</h4>
+<div class="trade-history" id="tradeHistory"></div>
+
+</div>
+
+</div>
+
+<div class="footer">
+<a href="index.html">Accueil</a>
+<a href="market.html">Marché</a>
+<a href="trade.html" class="active">Trade</a>
+</div>
+
+<script src="https://s3.tradingview.com/tv.js"></script>
+
+<script>
+
+/* ============================= */
+/* TRADINGVIEW CHART            */
+/* ============================= */
+
+new TradingView.widget({
+  container_id: "tvchart",
+  autosize: true,
+  symbol: "BINANCE:BTCUSDT",
+  interval: "1",
+  timezone: "Etc/UTC",
+  theme: "dark",
+  style: "1",
+  locale: "en",
+  toolbar_bg: "#0e1022",
+  enable_publishing: false,
+  allow_symbol_change: true,
+  studies: ["MACD@tv-basicstudies","RSI@tv-basicstudies","EMA@tv-basicstudies"],
+});
+
+/* ============================= */
+/* BINANCE LIVE STREAM          */
+/* ============================= */
+
+const symbol = "btcusdt";
+
+const depthSocket = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol}@depth20@100ms`);
+depthSocket.onmessage = function(event){
+  const data = JSON.parse(event.data);
+  renderOrderBook(data.bids, data.asks);
+};
+
+const tradeSocket = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol}@trade`);
+tradeSocket.onmessage = function(event){
+  const trade = JSON.parse(event.data);
+  renderTrade(trade);
+};
+
+/* ============================= */
+/* ORDER BOOK                   */
+/* ============================= */
+
+function renderOrderBook(bids, asks){
+  const ob = document.getElementById("orderbook");
+  ob.innerHTML = "";
+
+  asks.slice(0,10).reverse().forEach(a=>{
+    ob.innerHTML += `
+    <div class="order-row sell">
+      <div class="depth" style="width:${Math.min(a[1]*2,100)}%"></div>
+      <span>${parseFloat(a[0]).toFixed(2)}</span>
+      <span>${parseFloat(a[1]).toFixed(4)}</span>
+    </div>`;
+  });
+
+  bids.slice(0,10).forEach(b=>{
+    ob.innerHTML += `
+    <div class="order-row buy">
+      <div class="depth" style="width:${Math.min(b[1]*2,100)}%"></div>
+      <span>${parseFloat(b[0]).toFixed(2)}</span>
+      <span>${parseFloat(b[1]).toFixed(4)}</span>
+    </div>`;
+  });
+}
+
+/* ============================= */
+/* TAPE FEED                    */
+/* ============================= */
+
+function renderTrade(trade){
+  const history = document.getElementById("tradeHistory");
+  const div = document.createElement("div");
+
+  const price = parseFloat(trade.p).toFixed(2);
+  const qty = parseFloat(trade.q).toFixed(4);
+
+  div.innerText = `${trade.m ? "SELL" : "BUY"} ${qty} @ ${price}`;
+  div.style.color = trade.m ? "#ff4d4d" : "#00ffae";
+
+  history.prepend(div);
+  document.getElementById("livePrice").innerText = "$" + price;
+
+  if(history.children.length > 30){
+    history.removeChild(history.lastChild);
+  }
+}
+
+/* ============================= */
+/* ORDER SUBMISSION             */
+/* ============================= */
+
+function submitOrder(type){
+
+  const price = document.getElementById("priceInput").value;
+  const qty = document.getElementById("qtyInput").value;
+  const stop = document.getElementById("stopLossInput").value;
+
+  if(!qty){
+    alert("Enter quantity");
+    return;
+  }
+
+  console.log("Order Submitted:",{
+    type,
+    price,
+    qty,
+    stopLoss: stop || null
+  });
+
+  /* RESET PANEL AFTER SUBMIT */
+  document.getElementById("priceInput").value="";
+  document.getElementById("qtyInput").value="";
+  document.getElementById("stopLossInput").value="";
+
+}
+
+/* ============================= */
+/* MEMORY CLEAN                 */
+/* ============================= */
+
+setInterval(()=>{
+  const history = document.getElementById("tradeHistory");
+  while(history.children.length > 50){
+    history.removeChild(history.lastChild);
+  }
+},3000);
+
+</script>
+
+</body>
+</html>
