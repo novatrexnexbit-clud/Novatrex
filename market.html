@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>NOVATREX Market</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="style.css">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+<style>
+
+.market-container{
+padding:90px 15px 100px;
+}
+
+.market-header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-bottom:20px;
+}
+
+.market-title{
+font-size:22px;
+font-weight:bold;
+}
+
+.search-box{
+background:rgba(255,255,255,0.05);
+border:1px solid rgba(255,255,255,0.08);
+padding:8px 12px;
+border-radius:8px;
+color:white;
+width:160px;
+outline:none;
+}
+
+.market-table{
+width:100%;
+border-collapse:collapse;
+font-size:14px;
+}
+
+.market-table th{
+text-align:left;
+color:#888;
+padding:10px 5px;
+font-weight:500;
+border-bottom:1px solid rgba(255,255,255,0.05);
+}
+
+.market-table td{
+padding:12px 5px;
+border-bottom:1px solid rgba(255,255,255,0.04);
+transition:all 0.3s ease;
+}
+
+.market-row{
+transition:all 0.3s ease;
+}
+
+.market-row:hover{
+background:rgba(255,255,255,0.04);
+transform:scale(1.01);
+}
+
+.crypto-name{
+display:flex;
+align-items:center;
+gap:8px;
+font-weight:500;
+}
+
+.crypto-name i{
+font-size:16px;
+}
+
+.green{color:#00ffae;}
+.red{color:#ff4d4d;}
+
+.sparkline{
+width:70px;
+height:25px;
+}
+
+.fade-update{
+animation:fadeFlash 0.6s ease;
+}
+
+@keyframes fadeFlash{
+0%{background:rgba(255,255,255,0.08);}
+100%{background:transparent;}
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+<div class="logo">NOVATREX</div>
+<div class="search">Marché Crypto</div>
+<i class="fa-solid fa-chart-line"></i>
+</header>
+
+<div class="market-container">
+
+<div class="market-header">
+<div class="market-title">Marché Global</div>
+<input type="text" id="searchInput" class="search-box" placeholder="Rechercher...">
+</div>
+
+<table class="market-table">
+<thead>
+<tr>
+<th>Crypto</th>
+<th>Prix</th>
+<th>24h %</th>
+<th>Volume</th>
+<th>Graph</th>
+</tr>
+</thead>
+<tbody id="marketBody"></tbody>
+</table>
+
+</div>
+
+<div class="footer">
+<a href="index.html"><i class="fa-solid fa-house"></i>Accueil</a>
+<a href="market.html" class="active"><i class="fa-solid fa-chart-line"></i>Marché</a>
+<a href="trade.html"><i class="fa-solid fa-right-left"></i>Trade</a>
+<a href="#"><i class="fa-solid fa-layer-group"></i>Delivery</a>
+<a href="#"><i class="fa-solid fa-wallet"></i>Solde</a>
+</div>
+
+<script src="script.js"></script>
+
+<script>
+
+const cryptos=[
+{symbol:"BTC",price:64000},
+{symbol:"ETH",price:3200},
+{symbol:"SOL",price:140},
+{symbol:"BNB",price:410},
+{symbol:"XRP",price:0.60},
+{symbol:"ADA",price:0.55},
+{symbol:"DOGE",price:0.12},
+{symbol:"AVAX",price:35},
+{symbol:"MATIC",price:0.90},
+{symbol:"DOT",price:7.5},
+{symbol:"LTC",price:75},
+{symbol:"LINK",price:18}
+];
+
+function randomVolume(){
+return (Math.random()*500+50).toFixed(2)+"M";
+}
+
+function randomChange(){
+return (Math.random()*4-2).toFixed(2);
+}
+
+function generateSparkline(){
+let points=[];
+for(let i=0;i<15;i++){
+points.push(Math.random()*20+5);
+}
+return points;
+}
+
+function drawSparkline(canvas,data,color){
+let ctx=canvas.getContext("2d");
+ctx.clearRect(0,0,canvas.width,canvas.height);
+ctx.beginPath();
+ctx.moveTo(0,25-data[0]);
+for(let i=1;i<data.length;i++){
+ctx.lineTo(i*(70/15),25-data[i]);
+}
+ctx.strokeStyle=color;
+ctx.lineWidth=1.5;
+ctx.stroke();
+}
+
+function renderMarket(){
+let tbody=document.getElementById("marketBody");
+tbody.innerHTML="";
+cryptos.forEach(c=>{
+let change=randomChange();
+let color=change>=0?"green":"red";
+let row=document.createElement("tr");
+row.className="market-row";
+row.innerHTML=`
+<td class="crypto-name">
+<i class="fa-brands fa-bitcoin"></i>${c.symbol}
+</td>
+<td>$${c.price.toFixed(2)}</td>
+<td class="${color}">${change}%</td>
+<td>${randomVolume()}</td>
+<td><canvas class="sparkline"></canvas></td>
+`;
+tbody.appendChild(row);
+
+let canvas=row.querySelector("canvas");
+canvas.width=70;
+canvas.height=25;
+let data=generateSparkline();
+drawSparkline(canvas,data,change>=0?"#00ffae":"#ff4d4d");
+});
+}
+
+function updatePrices(){
+cryptos.forEach(c=>{
+c.price+= (Math.random()*100-50);
+});
+renderMarket();
+}
+
+document.getElementById("searchInput").addEventListener("input",function(){
+let filter=this.value.toUpperCase();
+let rows=document.querySelectorAll(".market-row");
+rows.forEach(row=>{
+let text=row.innerText.toUpperCase();
+row.style.display=text.includes(filter)?"":"none";
+});
+});
+
+renderMarket();
+setInterval(updatePrices,4000);
+
+</script>
+
+</body>
+</html>
