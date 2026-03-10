@@ -4,13 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NVX Dashboard</title>
-
 <style>
 body{
     margin:0;
     font-family:Arial, sans-serif;
     background:#0f172a;
     color:white;
+    overflow-y:auto; 
+    min-height:100vh;
 }
 header{
     display:flex;
@@ -19,6 +20,9 @@ header{
     padding:15px 20px;
     background:#111827;
     border-bottom:1px solid #1f2937;
+    position:sticky;
+    top:0;
+    z-index:100;
 }
 .logo{
     font-weight:bold;
@@ -27,9 +31,10 @@ header{
 }
 .section{
     background:#1e293b;
-    margin:20px;
+    margin:20px auto;
     padding:20px;
     border-radius:10px;
+    max-width:900px;
 }
 .balance{
     font-size:32px;
@@ -60,6 +65,7 @@ canvas{
     width:100%;
     background:#0f172a;
     border-radius:8px;
+    display:block;
 }
 .fade{
     animation:fade 0.4s ease-in-out;
@@ -68,9 +74,13 @@ canvas{
     from{opacity:0;}
     to{opacity:1;}
 }
+.auth-message{ display:none; margin:5px 0; font-weight:bold; }
+.auth-success{ color:#22c55e; }
+.auth-error{ color:#ef4444; }
+.auth-spinner{ display:none; margin-left:5px; width:14px; height:14px; border:2px solid #fff; border-top:2px solid transparent; border-radius:50%; animation:spin 1s linear infinite; }
+@keyframes spin{ from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
 </style>
 </head>
-
 <body>
 
 <header>
@@ -84,8 +94,8 @@ canvas{
 <div class="section">
     <h2>Solde Principal</h2>
     <div class="balance" id="balanceDisplay">0 USDT</div>
-    <button class="green" onclick="deposit()">➕ Dépôt</button>
-    <button class="red" onclick="withdraw()">➖ Retrait</button>
+    <button class="green" onclick="deposit()">➕ Dépôt +100</button>
+    <button class="red" onclick="withdraw()">➖ Retrait -50</button>
 </div>
 
 <div class="section">
@@ -104,7 +114,7 @@ canvas{
 
 <div class="section">
     <h2>Graphique</h2>
-    <canvas id="chart" height="120"></canvas>
+    <canvas id="chart" height="200"></canvas>
 </div>
 
 <div class="section">
@@ -122,7 +132,7 @@ canvas{
         <tbody id="historyBody"></tbody>
     </table>
 </div>
-<!-- WALLET MODULE -->
+
 <div class="section" id="walletModule">
     <h2>Wallet</h2>
 
@@ -134,10 +144,10 @@ canvas{
     </div>
 
     <div style="margin-top:10px;">
-        <button id="walletDepositBtn">➕ Dépôt</button>
-        <button id="walletWithdrawBtn">➖ Retrait</button>
+        <button id="walletDepositBtn">➕ Dépôt +100</button>
+        <button id="walletWithdrawBtn">➖ Retrait -50</button>
         <button id="walletTransferBtn">🔁 Transfert</button>
-        <button id="walletBonusBtn">🎁 Bonus</button>
+        <button id="walletBonusBtn">🎁 Bonus +10</button>
         <button id="walletHistoryBtn">📜 Historique</button>
     </div>
 
@@ -157,267 +167,154 @@ canvas{
 </div>
 
 <script>
+/* ===== AUTH SYSTEM ===== */
+const AUTH_USERS="auth_users";
+const AUTH_SESSION="auth_session";
 
-/* ===========================
-   🔐 SESSION STABLE DEFINITIVE
-=========================== */
-
-// On utilise UNIQUEMENT "session"
-const session = localStorage.getItem("session");
-
-if (!session) {
-    window.location.replace("login.html");
+/* SESSION CHECK */
+const session = JSON.parse(localStorage.getItem(AUTH_SESSION));
+if(!session){
+    // pas connecté → rester sur login/register
+} else {
+    // connecté → aller directement au dashboard
+    document.getElementById("userIdDisplay").textContent=session.email;
 }
 
-// Compatibilité ancienne version
-localStorage.setItem("loggedInUser", session);
-
-const userId = session;
-
-/* ===========================
-   📦 INITIALISATION DONNÉES
-=========================== */
-
-function initUserData() {
-
-    if (!localStorage.getItem(`user_${userId}_balance`)) {
-        localStorage.setItem(`user_${userId}_balance`, 1000);
-    }
-
-    if (!localStorage.getItem(`user_${userId}_history`)) {
-        localStorage.setItem(`user_${userId}_history`, JSON.stringify([]));
-    }
-
-    if (!localStorage.getItem(`user_${userId}_referrals`)) {
-        localStorage.setItem(`user_${userId}_referrals`, JSON.stringify([]));
-    }
-
-    if (!localStorage.getItem(`user_${userId}_wallet`)) {
-        localStorage.setItem(`user_${userId}_wallet`, JSON.stringify({
-            available:1000,
-            locked:0,
-            gains:0,
-            bonus:0
-        }));
+/* AUTH FUNCTIONS */
+function authShowMessage(elementId,message,type){
+    const el=document.getElementById(elementId);
+    if(!el) return;
+    el.className="auth-message";
+    el.classList.add(type==="success"?"auth-success":"auth-error");
+    el.innerText=message;
+    el.style.display="block";
+    setTimeout(()=>{ el.style.opacity="1"; },10);
+}
+function authToggleLoading(button,loading){
+    const spinner=button.querySelector(".auth-spinner");
+    const text=button.querySelector(".auth-btn-text");
+    if(loading){
+        button.disabled=true;
+        if(spinner) spinner.style.display="inline-block";
+        if(text) text.style.opacity="0.7";
+    } else {
+        button.disabled=false;
+        if(spinner) spinner.style.display="none";
+        if(text) text.style.opacity="1";
     }
 }
+function authRegister(){
+    const email=document.getElementById("authRegisterEmail").value.trim();
+    const password=document.getElementById("authRegisterPassword").value.trim();
+    const button=document.getElementById("authRegisterBtn");
+    if(!email||!password){ authShowMessage("authRegisterMessage","Tous les champs sont requis","error"); return; }
+    let users=JSON.parse(localStorage.getItem(AUTH_USERS))||[];
+    if(users.find(u=>u.email===email)){ authShowMessage("authRegisterMessage","Email déjà existant","error"); return; }
+    authToggleLoading(button,true);
+    setTimeout(()=>{
+        users.push({email,password});
+        localStorage.setItem(AUTH_USERS,JSON.stringify(users));
+        localStorage.setItem(AUTH_SESSION,JSON.stringify({email,password}));
+        authToggleLoading(button,false);
+        authShowMessage("authRegisterMessage","Compte créé avec succès","success");
+        setTimeout(()=>{ window.location.href="delivery.html"; },1200);
+    },1500);
+}
+function authLogin(){
+    const email=document.getElementById("authLoginEmail").value.trim();
+    const password=document.getElementById("authLoginPassword").value.trim();
+    const button=document.getElementById("authLoginBtn");
+    if(!email||!password){ authShowMessage("authLoginMessage","Tous les champs sont requis","error"); return; }
+    let users=JSON.parse(localStorage.getItem(AUTH_USERS))||[];
+    let user=users.find(u=>u.email===email && u.password===password);
+    if(!user){ authShowMessage("authLoginMessage","Identifiants incorrects","error"); return; }
+    authToggleLoading(button,true);
+    setTimeout(()=>{
+        localStorage.setItem(AUTH_SESSION,JSON.stringify(user));
+        authToggleLoading(button,false);
+        authShowMessage("authLoginMessage","Connexion réussie","success");
+        setTimeout(()=>{ window.location.href="delivery.html"; },1200);
+    },1500);
+}
 
+/* ===== DASHBOARD NVX ===== */
+const userId=session?session.email:null;
+
+function initUserData(){
+    if(!userId) return;
+    if(!localStorage.getItem(`user_${userId}_balance`)) localStorage.setItem(`user_${userId}_balance`,"1000");
+    if(!localStorage.getItem(`user_${userId}_history`)) localStorage.setItem(`user_${userId}_history`,JSON.stringify([]));
+    if(!localStorage.getItem(`user_${userId}_referrals`)) localStorage.setItem(`user_${userId}_referrals`,JSON.stringify([]));
+    if(!localStorage.getItem(`user_${userId}_wallet`)) localStorage.setItem(`user_${userId}_wallet`,JSON.stringify({available:1000,locked:0,gains:0,bonus:0}));
+}
 initUserData();
 
-/* ===========================
-   HEADER
-=========================== */
+document.getElementById("userIdDisplay").textContent=userId;
 
-document.getElementById("userIdDisplay").textContent = userId;
-
-/* ===========================
-   💰 SOLDE PRINCIPAL
-=========================== */
-
-const balanceEl = document.getElementById("balanceDisplay");
-
-function getBalance(){
-    return parseFloat(localStorage.getItem(`user_${userId}_balance`));
-}
-
-function setBalance(value){
-    localStorage.setItem(`user_${userId}_balance`, value);
-    balanceEl.textContent = value.toFixed(2)+" USDT";
-}
-
+const balanceEl=document.getElementById("balanceDisplay");
+function getBalance(){ return parseFloat(localStorage.getItem(`user_${userId}_balance`)); }
+function setBalance(value){ localStorage.setItem(`user_${userId}_balance`,value); balanceEl.textContent=value.toFixed(2)+" USDT"; }
 setBalance(getBalance());
 
-function deposit(){
-    let balance = getBalance();
-    balance += 100;
-    setBalance(balance);
-    addHistory("Dépôt",100,"+");
-}
+function deposit(){ let b=getBalance(); b+=100; setBalance(b); addHistory("Dépôt",100,"+"); }
+function withdraw(){ let b=getBalance(); if(b>=50){ b-=50; setBalance(b); addHistory("Retrait",50,"-"); } }
 
-function withdraw(){
-    let balance = getBalance();
-    if(balance>=50){
-        balance -= 50;
-        setBalance(balance);
-        addHistory("Retrait",50,"-");
-    }
-}
-
-/* ===========================
-   📜 HISTORIQUE GLOBAL
-=========================== */
-
-function addHistory(type, amount, result){
-
-    let history = JSON.parse(localStorage.getItem(`user_${userId}_history`));
-
-    history.unshift({
-        date:new Date().toLocaleString(),
-        type,
-        amount,
-        result
-    });
-
-    localStorage.setItem(`user_${userId}_history`, JSON.stringify(history));
+function addHistory(type,amount,result){
+    let h=JSON.parse(localStorage.getItem(`user_${userId}_history`));
+    h.unshift({date:new Date().toLocaleString(),type,amount,result});
+    localStorage.setItem(`user_${userId}_history`,JSON.stringify(h));
     loadHistory();
 }
-
 function loadHistory(){
-
-    const body = document.getElementById("historyBody");
-    body.innerHTML="";
-
-    let history = JSON.parse(localStorage.getItem(`user_${userId}_history`));
-
-    history.forEach(h=>{
-        body.innerHTML+=`
-        <tr>
-            <td>${h.date}</td>
-            <td>${h.type}</td>
-            <td>${h.amount}</td>
-            <td>${h.result}</td>
-        </tr>`;
-    });
+    const body=document.getElementById("historyBody"); body.innerHTML="";
+    let h=JSON.parse(localStorage.getItem(`user_${userId}_history`));
+    h.forEach(e=>{ body.innerHTML+=`<tr><td>${e.date}</td><td>${e.type}</td><td>${e.amount}</td><td>${e.result}</td></tr>`; });
 }
-
 loadHistory();
-
-function toggleHistory(){
-    const table = document.getElementById("historyTable");
-    table.style.display = table.style.display==="none"?"table":"none";
-}
-
-/* ===========================
-   👥 PARRAINAGE
-=========================== */
+function toggleHistory(){ const t=document.getElementById("historyTable"); t.style.display=t.style.display==="none"?"table":"none"; }
 
 function loadReferrals(){
-
-    let refs = JSON.parse(localStorage.getItem(`user_${userId}_referrals`));
-    const list = document.getElementById("refList");
-
-    list.innerHTML="";
-    refs.forEach(r=>{
-        list.innerHTML+=`<li>${r}</li>`;
-    });
-
-    document.getElementById("refCount").textContent = refs.length;
-
-    document.getElementById("refLink").value =
-        window.location.origin+"/register.html?ref="+userId;
+    let refs=JSON.parse(localStorage.getItem(`user_${userId}_referrals`));
+    const list=document.getElementById("refList"); list.innerHTML="";
+    refs.forEach(r=>{ list.innerHTML+=`<li>${r}</li>`; });
+    document.getElementById("refCount").textContent=refs.length;
+    document.getElementById("refLink").value=window.location.origin+"/register.html?ref="+userId;
 }
-
-function copyRef(){
-    const input = document.getElementById("refLink");
-    input.select();
-    document.execCommand("copy");
-}
-
+function copyRef(){ const input=document.getElementById("refLink"); if(navigator.clipboard){ navigator.clipboard.writeText(input.value); } else { input.select(); document.execCommand("copy"); } }
 loadReferrals();
 
-/* ===========================
-   📈 SIGNALS AUTO (VIVANT)
-=========================== */
-
 function generateSignal(){
-
-    const pairs=["BTC/USDT","ETH/USDT"];
-    const types=["BUY","SELL"];
-
-    const pair=pairs[Math.floor(Math.random()*2)];
-    const type=types[Math.floor(Math.random()*2)];
+    const p=["BTC/USDT","ETH/USDT"], t=["BUY","SELL"];
+    const pair=p[Math.floor(Math.random()*2)];
+    const type=t[Math.floor(Math.random()*2)];
     const price=(Math.random()*50000).toFixed(2);
-
-    document.getElementById("signalBox").innerHTML=`
-        Pair: ${pair}<br>
-        Type: ${type}<br>
-        Prix: ${price}<br>
-        Heure: ${new Date().toLocaleTimeString()}
-    `;
+    document.getElementById("signalBox").innerHTML=`Pair: ${pair}<br>Type: ${type}<br>Prix: ${price}<br>Heure: ${new Date().toLocaleTimeString()}`;
 }
-
 setInterval(generateSignal,5000);
 generateSignal();
 
-/* ===========================
-   📊 GRAPH DYNAMIQUE
-=========================== */
-
 const canvas=document.getElementById("chart");
+canvas.width=canvas.offsetWidth; canvas.height=canvas.offsetHeight;
 const ctx=canvas.getContext("2d");
+let prices=[]; for(let i=0;i<50;i++){ prices.push(30000+Math.random()*1000); }
+function drawChart(){ ctx.clearRect(0,0,canvas.width,canvas.height); ctx.beginPath(); ctx.moveTo(0,canvas.height-prices[0]/100); for(let i=1;i<prices.length;i++){ ctx.lineTo(i*6,canvas.height-prices[i]/100); } ctx.strokeStyle="#22c55e"; ctx.stroke(); }
+function updatePrice(){ prices.shift(); prices.push(prices[prices.length-1]+(Math.random()-0.5)*200); drawChart(); }
+setInterval(updatePrice,1000); drawChart();
 
-let prices=[];
-for(let i=0;i<50;i++){
-    prices.push(30000+Math.random()*1000);
-}
-
-function drawChart(){
-
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    ctx.beginPath();
-    ctx.moveTo(0,canvas.height-prices[0]/100);
-
-    for(let i=1;i<prices.length;i++){
-        ctx.lineTo(i*6,canvas.height-prices[i]/100);
-    }
-
-    ctx.strokeStyle="#22c55e";
-    ctx.stroke();
-}
-
-function updatePrice(){
-    prices.shift();
-    prices.push(prices[prices.length-1]+(Math.random()-0.5)*200);
-    drawChart();
-}
-
-setInterval(updatePrice,1000);
-drawChart();
-
-/* ===========================
-   🏦 WALLET MODULE STABLE
-=========================== */
-
-function getWallet(){
-    return JSON.parse(localStorage.getItem(`user_${userId}_wallet`));
-}
-
-function saveWallet(w){
-    localStorage.setItem(`user_${userId}_wallet`,JSON.stringify(w));
-    renderWallet();
-}
-
-function renderWallet(){
-
-    const w=getWallet();
-
-    document.getElementById("walletAvailable").textContent=w.available.toFixed(2)+" USDT";
-    document.getElementById("walletLocked").textContent=w.locked.toFixed(2)+" USDT";
-    document.getElementById("walletGains").textContent=w.gains.toFixed(2)+" USDT";
-    document.getElementById("walletBonus").textContent=w.bonus.toFixed(2)+" USDT";
-}
-
+function getWallet(){ return JSON.parse(localStorage.getItem(`user_${userId}_wallet`)); }
+function saveWallet(w){ localStorage.setItem(`user_${userId}_wallet`,JSON.stringify(w)); renderWallet(); }
+function renderWallet(){ const w=getWallet(); document.getElementById("walletAvailable").textContent=w.available.toFixed(2)+" USDT"; document.getElementById("walletLocked").textContent=w.locked.toFixed(2)+" USDT"; document.getElementById("walletGains").textContent=w.gains.toFixed(2)+" USDT"; document.getElementById("walletBonus").textContent=w.bonus.toFixed(2)+" USDT"; }
 renderWallet();
 
-/* Gains automatiques */
-setInterval(()=>{
-    let w=getWallet();
-    w.gains+=0.05;
-    saveWallet(w);
-},4000);
+document.getElementById("walletDepositBtn").onclick=()=>{ let w=getWallet(); w.available+=100; saveWallet(w); };
+document.getElementById("walletWithdrawBtn").onclick=()=>{ let w=getWallet(); if(w.available>=50){ w.available-=50; saveWallet(w); } };
+document.getElementById("walletTransferBtn").onclick=()=>{ alert("Transfert à implémenter"); };
+document.getElementById("walletBonusBtn").onclick=()=>{ let w=getWallet(); w.bonus+=10; saveWallet(w); };
+document.getElementById("walletHistoryBtn").onclick=()=>{ const c=document.getElementById("walletHistoryContainer"); c.style.display=c.style.display==="none"?"block":"none"; };
 
-/* ===========================
-   🔓 LOGOUT PROPRE
-=========================== */
+setInterval(()=>{ let w=getWallet(); w.gains+=0.05; saveWallet(w); },4000);
 
-function logout(){
-    localStorage.removeItem("session");
-    localStorage.removeItem("loggedInUser");
-    window.location.replace("delivery.html");
-}
-
+function logout(){ localStorage.removeItem(AUTH_SESSION); window.location.href="login.html"; }
 </script>
-
 </body>
-          </html>
+</html>
