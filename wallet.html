@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wallet</title>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial, sans-serif;
+  background:#0b0f19;
+  color:#fff;
+}
+
+.wallet-container{
+  max-width:1100px;
+  margin:auto;
+  padding:20px;
+}
+
+.wallet-card{
+  background:#131a2a;
+  padding:25px;
+  border-radius:12px;
+  margin-bottom:20px;
+}
+
+.wallet-title{
+  font-size:22px;
+  margin-bottom:15px;
+}
+
+.wallet-balance{
+  font-size:32px;
+  font-weight:bold;
+  margin-bottom:10px;
+}
+
+.wallet-sub{
+  opacity:.7;
+  font-size:14px;
+  margin-bottom:6px;
+}
+
+.wallet-buttons{
+  display:flex;
+  gap:15px;
+  margin-top:20px;
+}
+
+.wallet-btn{
+  flex:1;
+  padding:12px;
+  background:#1f2a44;
+  border:none;
+  color:#fff;
+  border-radius:8px;
+  cursor:pointer;
+  transition:.3s;
+}
+
+.wallet-btn:hover{
+  background:#2c3a5f;
+}
+
+.wallet-history table{
+  width:100%;
+  border-collapse:collapse;
+}
+
+.wallet-history th, .wallet-history td{
+  padding:10px;
+  border-bottom:1px solid #222;
+  text-align:left;
+  font-size:14px;
+}
+
+.wallet-popup{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.7);
+  display:none;
+  align-items:center;
+  justify-content:center;
+}
+
+.wallet-popup-content{
+  background:#131a2a;
+  padding:20px;
+  border-radius:10px;
+  width:320px;
+}
+
+.wallet-input{
+  width:100%;
+  padding:10px;
+  margin:10px 0;
+  background:#1f2a44;
+  border:none;
+  color:#fff;
+  border-radius:6px;
+}
+
+.wallet-close{
+  text-align:right;
+  cursor:pointer;
+  opacity:.7;
+}
+
+.wallet-message{
+  margin-top:10px;
+  font-size:13px;
+}
+
+.wallet-success{color:#00ff88;}
+.wallet-error{color:#ff4d4d;}
+
+</style>
+</head>
+
+<body>
+
+<div class="wallet-container">
+
+  <div class="wallet-card">
+    <div class="wallet-title">Main Balance</div>
+    <div class="wallet-balance" id="availableBalance">$0.00</div>
+    <div class="wallet-sub">Locked: <span id="lockedBalance">$0.00</span></div>
+    <div class="wallet-sub">Gains: <span id="gainsBalance">$0.00</span></div>
+    <div class="wallet-sub">Referral Bonus: <span id="bonusBalance">$0.00</span></div>
+
+    <div class="wallet-buttons">
+      <button class="wallet-btn" onclick="openPopup('deposit')">Deposit</button>
+      <button class="wallet-btn" onclick="openPopup('withdraw')">Withdraw</button>
+      <button class="wallet-btn" onclick="transferFunds()">Transfer</button>
+      <button class="wallet-btn" onclick="toggleHistory()">Transaction History</button>
+    </div>
+  </div>
+
+  <div class="wallet-card wallet-history" id="historySection" style="display:none;">
+    <div class="wallet-title">History</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Type</th>
+          <th>Amount</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="historyTable"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- POPUP -->
+<div class="wallet-popup" id="walletPopup">
+  <div class="wallet-popup-content">
+    <div class="wallet-close" onclick="closePopup()">✖</div>
+    <div id="popupContent"></div>
+  </div>
+</div>
+<script>
+
+/* =====================================================
+   🔐 1️⃣ SESSION CHECK (OBLIGATOIRE)
+===================================================== */
+
+const session = localStorage.getItem("session");
+
+if (!session) {
+    window.location.replace("login.html");
+}
+
+const userId = session;
+const walletKey = `wallet_${userId}`;
+
+/* =====================================================
+   🏦 2️⃣ INITIALISATION WALLET UTILISATEUR
+===================================================== */
+
+function initWallet() {
+
+    let wallet = JSON.parse(localStorage.getItem(walletKey));
+
+    if (!wallet || typeof wallet !== "object") {
+        wallet = {
+            available: 1000,
+            locked: 0,
+            bonus: 0,
+            gains: 0,
+            history: []
+        };
+        localStorage.setItem(walletKey, JSON.stringify(wallet));
+    }
+}
+
+initWallet();
+
+/* =====================================================
+   📦 HELPERS
+===================================================== */
+
+function getWallet() {
+    return JSON.parse(localStorage.getItem(walletKey));
+}
+
+function saveWallet(wallet) {
+    localStorage.setItem(walletKey, JSON.stringify(wallet));
+    renderWallet();
+    renderHistory();
+}
+
+function formatDate(date) {
+    return new Date(date).toLocaleString();
+}
+
+/* =====================================================
+   🎨 RENDER WALLET
+===================================================== */
+
+function renderWallet() {
+
+    const wallet = getWallet();
+
+    document.getElementById("availableBalance").innerText =
+        "$" + wallet.available.toFixed(2);
+
+    document.getElementById("lockedBalance").innerText =
+        "$" + wallet.locked.toFixed(2);
+
+    document.getElementById("gainsBalance").innerText =
+        "$" + wallet.gains.toFixed(2);
+
+    document.getElementById("bonusBalance").innerText =
+        "$" + wallet.bonus.toFixed(2);
+}
+
+renderWallet();
+
+/* =====================================================
+   📜 HISTORIQUE CLAIR
+===================================================== */
+
+function renderHistory() {
+
+    const wallet = getWallet();
+    const table = document.getElementById("historyTable");
+
+    if (!table) return;
+
+    table.innerHTML = "";
+
+    if (!wallet.history || wallet.history.length === 0) {
+        table.innerHTML = `
+            <tr>
+                <td colspan="4" style="opacity:.6;">No transactions yet.</td>
+            </tr>`;
+        return;
+    }
+
+    wallet.history.slice().reverse().forEach(tx => {
+
+        table.innerHTML += `
+        <tr>
+            <td>${formatDate(tx.date)}</td>
+            <td>${tx.type}</td>
+            <td>$${parseFloat(tx.amount).toFixed(2)}</td>
+            <td>${tx.status}</td>
+        </tr>`;
+    });
+}
+
+renderHistory();
+
+/* =====================================================
+   🔔 NOTIFICATION MODERNE
+===================================================== */
+
+function showNotification(message, success = true) {
+
+    const popup = document.createElement("div");
+    popup.innerText = message;
+
+    popup.style.position = "fixed";
+    popup.style.bottom = "30px";
+    popup.style.right = "30px";
+    popup.style.background = success ? "#16a34a" : "#dc2626";
+    popup.style.color = "white";
+    popup.style.padding = "12px 18px";
+    popup.style.borderRadius = "8px";
+    popup.style.boxShadow = "0 8px 25px rgba(0,0,0,0.4)";
+    popup.style.opacity = "0";
+    popup.style.transition = "0.4s";
+    popup.style.zIndex = "9999";
+
+    document.body.appendChild(popup);
+
+    setTimeout(() => popup.style.opacity = "1", 100);
+
+    setTimeout(() => {
+        popup.style.opacity = "0";
+        setTimeout(() => popup.remove(), 400);
+    }, 2000);
+}
+
+/* =====================================================
+   🪟 MODAL GENERATOR
+===================================================== */
+
+function openModal(contentHTML, onConfirm) {
+
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.background = "rgba(0,0,0,.6)";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.zIndex = "9999";
+
+    const box = document.createElement("div");
+    box.style.background = "#131a2a";
+    box.style.padding = "20px";
+    box.style.borderRadius = "10px";
+    box.style.width = "320px";
+    box.innerHTML = contentHTML;
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    box.querySelector(".cancelBtn").onclick = () => overlay.remove();
+
+    box.querySelector(".confirmBtn").onclick = () => {
+        onConfirm(overlay);
+    };
+}
+
+/* =====================================================
+   💰 4️⃣ DEPOSIT
+===================================================== */
+
+function openDeposit() {
+
+    openModal(`
+        <h3>Deposit</h3>
+        <input type="number" id="depositAmount" placeholder="Amount" class="wallet-input">
+        <button class="wallet-btn confirmBtn">Confirm</button>
+        <button class="wallet-btn cancelBtn">Cancel</button>
+    `, (overlay) => {
+
+        const amount = parseFloat(document.getElementById("depositAmount").value);
+
+        if (!amount || amount <= 0) {
+            showNotification("Invalid amount", false);
+            return;
+        }
+
+        const wallet = getWallet();
+        wallet.available += amount;
+
+        wallet.history.push({
+            type: "Deposit",
+            amount: amount,
+            status: "Completed",
+            date: new Date()
+        });
+
+        saveWallet(wallet);
+        overlay.remove();
+        showNotification("Deposit Successful");
+    });
+}
+
+/* =====================================================
+   💸 5️⃣ WITHDRAW
+===================================================== */
+
+function openWithdraw() {
+
+    openModal(`
+        <h3>Withdraw</h3>
+        <input type="text" id="withdrawAddress" placeholder="TRC20 Address" class="wallet-input">
+        <input type="number" id="withdrawAmount" placeholder="Amount" class="wallet-input">
+        <button class="wallet-btn confirmBtn">Confirm</button>
+        <button class="wallet-btn cancelBtn">Cancel</button>
+    `, (overlay) => {
+
+        const address = document.getElementById("withdrawAddress").value.trim();
+        const amount = parseFloat(document.getElementById("withdrawAmount").value);
+
+        const wallet = getWallet();
+
+        if (address.length < 10) {
+            showNotification("Invalid address", false);
+            return;
+        }
+
+        if (!amount || amount <= 0 || amount > wallet.available) {
+            showNotification("Invalid amount", false);
+            return;
+        }
+
+        wallet.available -= amount;
+
+        wallet.history.push({
+            type: "Withdraw",
+            amount: amount,
+            status: "Pending",
+            date: new Date()
+        });
+
+        saveWallet(wallet);
+        overlay.remove();
+        showNotification("Withdraw Request Submitted");
+    });
+}
+
+/* =====================================================
+   🔁 6️⃣ TRANSFER
+===================================================== */
+
+function openTransfer() {
+
+    openModal(`
+        <h3>Transfer</h3>
+        <input type="number" id="transferAmount" placeholder="Amount" class="wallet-input">
+        <button class="wallet-btn confirmBtn">Confirm</button>
+        <button class="wallet-btn cancelBtn">Cancel</button>
+    `, (overlay) => {
+
+        const amount = parseFloat(document.getElementById("transferAmount").value);
+        const wallet = getWallet();
+
+        if (!amount || amount <= 0 || amount > wallet.available) {
+            showNotification("Invalid amount", false);
+            return;
+        }
+
+        wallet.available -= amount;
+        wallet.locked += amount;
+
+        wallet.history.push({
+            type: "Transfer",
+            amount: amount,
+            status: "Locked",
+            date: new Date()
+        });
+
+        saveWallet(wallet);
+        overlay.remove();
+        showNotification("Transfer Successful");
+    });
+}
+
+/* =====================================================
+   🔘 3️⃣ BOUTONS ACTIFS
+===================================================== */
+
+document.querySelector(".wallet-buttons button:nth-child(1)").addEventListener("click", openDeposit);
+document.querySelector(".wallet-buttons button:nth-child(2)").addEventListener("click", openWithdraw);
+document.querySelector(".wallet-buttons button:nth-child(3)").addEventListener("click", openTransfer);
+
+/* =====================================================
+   📈 9️⃣ ACTIVITÉS RÉCENTES STYLE BINANCE
+===================================================== */
+
+const activityBox = document.createElement("div");
+activityBox.style.marginTop = "15px";
+activityBox.style.fontSize = "13px";
+document.querySelector(".wallet-container").appendChild(activityBox);
+
+function generateActivity() {
+
+    const types = ["Deposit", "Withdraw", "Trade Profit"];
+    const type = types[Math.floor(Math.random()*types.length)];
+    const amount = (Math.random()*500).toFixed(2);
+
+    activityBox.innerHTML = `
+        <div style="opacity:.7;">
+            ${type} • $${amount} • ${new Date().toLocaleTimeString()}
+        </div>`;
+}
+
+setInterval(generateActivity, 3000);
+generateActivity();
+
+/* =====================================================
+   AUTO GAINS
+===================================================== */
+
+setInterval(() => {
+    const wallet = getWallet();
+    wallet.gains += 0.02;
+    saveWallet(wallet);
+}, 5000);
+
+</script>
+</body>
+</html>
