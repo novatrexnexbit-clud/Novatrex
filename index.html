@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>NOVATREX Exchange</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+<style>
+
+/* ===== BACKGROUND ORIGINAL CONSERVÉ ===== */
+body{
+background:
+radial-gradient(circle at 20% 20%, rgba(124,58,237,0.15), transparent 40%),
+radial-gradient(circle at 80% 70%, rgba(0,229,255,0.12), transparent 40%),
+linear-gradient(180deg,#06070f,#0f1020);
+overflow-x:hidden;
+color:white;
+font-family:Arial;
+margin:0;
+padding-bottom:80px;
+}
+
+/* ===== HEADER ===== */
+header{
+position:sticky;
+top:0;
+z-index:1000;
+padding:15px 20px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+
+.logo{
+font-weight:bold;
+font-size:20px;
+color:#00e5ff;
+}
+
+/* ===== MENU ===== */
+.menu-btn{
+background:none;
+border:none;
+color:white;
+font-size:20px;
+cursor:pointer;
+}
+
+.dropdown{
+position:absolute;
+top:60px;
+right:20px;
+background:#111428;
+border-radius:10px;
+display:none;
+flex-direction:column;
+padding:10px;
+min-width:160px;
+box-shadow:0 0 20px rgba(0,0,0,0.5);
+}
+
+.dropdown a{
+color:#aaa;
+padding:8px;
+text-decoration:none;
+font-size:14px;
+}
+
+.dropdown a:hover{
+color:#00e5ff;
+}
+
+/* ===== HERO ===== */
+.hero{
+padding:60px 20px 40px;
+text-align:center;
+}
+
+.hero h1{
+font-size:34px;
+font-weight:bold;
+background:linear-gradient(90deg,#7c3aed,#00e5ff);
+-webkit-background-clip:text;
+-webkit-text-fill-color:transparent;
+}
+
+.hero p{
+margin-top:15px;
+color:#aaa;
+}
+
+.cta{
+margin-top:25px;
+display:inline-block;
+padding:14px 30px;
+border-radius:30px;
+background:linear-gradient(90deg,#7c3aed,#00e5ff);
+font-weight:bold;
+cursor:pointer;
+color:white;
+text-decoration:none;
+}
+
+/* ===== STATS ===== */
+.stats{
+display:flex;
+justify-content:space-between;
+margin:30px 20px;
+gap:10px;
+flex-wrap:wrap;
+}
+
+.stat-card{
+flex:1;
+background:rgba(255,255,255,0.05);
+border-radius:15px;
+padding:15px;
+text-align:center;
+}
+
+/* ===== MARKET ===== */
+.preview{
+margin:20px;
+padding:20px;
+background:rgba(255,255,255,0.05);
+border-radius:20px;
+}
+
+.preview-item{
+display:flex;
+justify-content:space-between;
+padding:12px 0;
+border-bottom:1px solid rgba(255,255,255,0.05);
+}
+
+/* ===== SECTIONS ===== */
+.section{
+margin:40px 20px;
+padding:25px;
+background:rgba(255,255,255,0.05);
+border-radius:20px;
+}
+
+.faq-title{
+cursor:pointer;
+margin-top:10px;
+font-weight:bold;
+}
+
+.faq-content{
+display:none;
+color:#aaa;
+margin-top:5px;
+}
+
+/* ===== FOOTER FIXE (IDENTIQUE PARTOUT) ===== */
+.footer{
+display:flex;
+justify-content:space-around;
+padding:15px;
+background:#0d0f1f;
+position:fixed;
+bottom:0;
+width:100%;
+}
+
+.footer a{
+color:#aaa;
+text-decoration:none;
+font-size:12px;
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+<div class="logo">NOVATREX</div>
+
+<button class="menu-btn" onclick="toggleMenu()">
+<i class="fa-solid fa-bars"></i>
+</button>
+
+<div class="dropdown" id="dropdownMenu">
+<a href="settings.html">paramètres</a>
+<a href="login.html">Connexion</a>
+<a href="#faq">FAQ</a>
+<a href="#privacy">Confidentialité</a>
+</div>
+
+</header>
+
+<div class="hero">
+<h1>Next Generation Digital Asset Exchange</h1>
+<p>Secure. Fast. Institutional Grade.</p>
+<a href="trade.html" class="cta">Commencer à Trader</a>
+</div>
+
+<div class="stats">
+<div class="stat-card">
+<h3 id="volCount">0</h3>
+<div>Volume 24h</div>
+</div>
+<div class="stat-card">
+<h3 id="userCount">0</h3>
+<div>Total Users</div>
+</div>
+<div class="stat-card">
+<h3 id="secRate">0</h3>
+<div>Security Rating</div>
+</div>
+</div>
+
+<div class="preview">
+<h3>Aperçu Marché</h3>
+<div id="market"></div>
+</div>
+
+<div class="section" id="faq">
+<h2>FAQ</h2>
+
+<div class="faq-title" onclick="toggleFaq(this)">
+How withdrawals work?
+</div>
+<div class="faq-content">
+Withdrawals are processed securely with monitoring systems.
+</div>
+
+<div class="faq-title" onclick="toggleFaq(this)">
+How KYC verification works?
+</div>
+<div class="faq-content">
+Verification ensures compliance and user protection.
+</div>
+
+</div>
+
+<div class="section" id="privacy">
+<h2>Confidentialité</h2>
+<p style="color:#aaa;">
+Data encryption. Risk monitoring. Regulatory compliance.
+</p>
+</div>
+
+<div class="footer">
+<a href="index.html"><i class="fa-solid fa-house"></i>Accueil</a>
+<a href="market.html"><i class="fa-solid fa-chart-line"></i>Marché</a>
+<a href="trade.html"><i class="fa-solid fa-right-left"></i>Trade</a>
+<a href="delivery.html"><i class="fa-solid fa-layer-group"></i>Delivery</a>
+<a href="wallet.html"><i class="fa-solid fa-wallet"></i>Solde</a>
+</div>
+
+<script>
+
+/* MENU */
+function toggleMenu(){
+let menu=document.getElementById("dropdownMenu");
+menu.style.display=menu.style.display==="flex"?"none":"flex";
+}
+
+/* COUNTER */
+function animate(id,start,end){
+let obj=document.getElementById(id);
+let current=start;
+let interval=setInterval(()=>{
+current+=Math.ceil((end-start)/30);
+if(current>=end){
+current=end;
+clearInterval(interval);
+}
+obj.innerText=current;
+},50);
+}
+
+animate("volCount",0,920);
+animate("userCount",0,18000);
+animate("secRate",0,99);
+
+/* MARKET */
+const coins=[
+{name:"BTC / USDT",price:68000},
+{name:"ETH / USDT",price:3500},
+{name:"BNB / USDT",price:420}
+];
+
+function renderMarket(){
+const container=document.getElementById("market");
+container.innerHTML="";
+coins.forEach(c=>{
+let change=(Math.random()*2-1).toFixed(2);
+c.price+=(Math.random()*100-50);
+let color=change>=0?"#00ff99":"#ff4d6d";
+container.innerHTML+=`
+<div class="preview-item">
+<span>${c.name}</span>
+<span>$${c.price.toFixed(2)}</span>
+<span style="color:${color};">${change}%</span>
+</div>`;
+});
+}
+
+renderMarket();
+setInterval(renderMarket,4000);
+
+/* FAQ */
+function toggleFaq(el){
+let content=el.nextElementSibling;
+content.style.display=content.style.display==="block"?"none":"block";
+}
+
+</script>
+
+</body>
+  </html>
